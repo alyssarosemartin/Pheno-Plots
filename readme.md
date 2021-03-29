@@ -9,3 +9,6 @@ This is the shiny app code, which first acquires and processes the phenology obs
 
 The code runs in R, with rnpn, curl, shiny, dplyr and lubridate libraries loaded.
 
+## PDF PhenoPlots
+
+This is simpler code, that does essentially the same thing as the Shiny app, but outputs results (plots of phenophase onset by year) as PDFs
