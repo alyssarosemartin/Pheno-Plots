@@ -4,6 +4,9 @@ library(lubridate)
 rm(list=ls())
 setwd("")
 
+
+
+
 cdf <- npn_download_status_data(
   request_source = 'ADD HERE', 
   network_ids = c(72),
