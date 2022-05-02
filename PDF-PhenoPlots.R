@@ -4,8 +4,9 @@ library(lubridate)
 rm(list=ls())
 setwd("")
 
+#adding line to test
 
-
+species_list <- npn_species()
 
 cdf <- npn_download_status_data(
   request_source = 'ADD HERE', 
