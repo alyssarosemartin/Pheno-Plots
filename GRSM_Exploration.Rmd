@@ -1,0 +1,148 @@
+---
+title: "Great Smoky Mountains Phenology Data Demo"
+author: "USA-NPN"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(rnpn)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(ggpmisc)
+library(ggpubr)
+```
+
+## Introduction
+
+This is a demonstration/pilot exploration of the Great Smoky Mountains phenology data, focusing on flowering in red maple. The idea is to start to lay code and data analysis framework to make reporting easy for any phenology project. 
+
+The code behind this PDF does the following:
+
+1. Downloads status data for GRSM, 2011-2022, for red maple, flowers/flower buds phenophase, with the Daymet climate data
+
+2. Formats data and selects the earliest yes in each year ("first flower date" or FFD), and removes any FFDs that fall after day 182 (to focus on spring flowering only)
+
+3. Removes individual plants with fewer than five years of observations.
+
+4. Removes first flower dates that are outliers, defined as falling outside 1.5 times the Interquartile Range for an individual plant. 
+
+5. Models the relationship between spring maximum temperatures and first flower date, and then looks for randomly distributed residuals using a Shapiro-Wilk test. As the residuals are not randomly distributed, it is likely that a non-parametric test should be used instead.
+
+6. Models the relationship between year and first flower date (trend), and then looks for randomly distributed residuals using a Shapiro-Wilk test. As the residuals are not randomly distributed, it is likely that a non-parametric test should be used instead.
+
+
+```{r cache = TRUE, include=FALSE}
+#Download data
+df <- npn_download_status_data(
+  request_source = 'Alyssa Rmarkdown Demo', 
+  network_ids = c(72),
+  years = c(2011:2022), 
+  species_ids = c(82), # red maple
+  phenophase_ids = c(500), #flowers or flower buds
+  additional_fields = c("Site_Name", "Network_Name", "Phenophase_Category", "Observed_Status_Conflict_Flag"),
+  climate_data = TRUE
+)
+nrow(df)
+```
+
+
+```{r cache = TRUE, include=FALSE}
+# Clean up and format data for analysis
+df1=df %>%
+  dplyr::mutate(year = lubridate::year(observation_date), 
+                month = lubridate::month(observation_date), 
+                day = lubridate::day(observation_date))
+
+df1 <- df1 %>%
+  subset(phenophase_status == 1) %>%
+  group_by(year, individual_id, species_id, phenophase_description) %>%
+  filter(day_of_year == min(day_of_year)) %>%
+  filter(day_of_year < 182)  %>% 
+  mutate(tmax_winter = na_if(tmax_winter, "-9999"))  %>% 
+  mutate(tmax_spring = na_if(tmax_spring, "-9999")) 
+
+nrow(df1)
+```
+
+
+
+```{r cache = TRUE, include=FALSE}
+#Apply a quality control measure 
+df1 <- df1 %>% 
+  group_by(individual_id) %>% 
+  filter(n_distinct(year) > 4) %>% 
+  mutate(ind_spp_pp = paste(individual_id, species_id, phenophase_description, sep = '_'))
+
+quantiles <- as.data.frame(df1 %>%
+                             group_by(ind_spp_pp) %>%
+                             summarize(Q1 = quantile(day_of_year, .25), 
+                                       Q3 = quantile(day_of_year, .75),
+                                       IQR = IQR(day_of_year)))
+
+df1 <- df1 %>% 
+  right_join(quantiles, by = "ind_spp_pp")
+
+df2 <- subset(
+  df1, (df1$day_of_year > (Q1 - 1.5*df1$IQR) & 
+        df1$day_of_year < (Q3 + 1.5*df1$IQR))
+)
+```
+
+### Plot 1: Relationship between spring maximum temperatures and first flower date
+
+```{r cache=TRUE, echo=FALSE, warning=FALSE}
+p <- ggplot(data = df2, aes(x = tmax_spring, y = day_of_year)) +
+    stat_cor() +
+    stat_smooth(method = "lm", formula = y~x , size = 1) +  
+    geom_point() 
+plot(p + labs(title = "Date of flowers by spring tmax (red maple)"))
+```
+
+### Model parmeters
+
+```{r cache = TRUE, include=TRUE}
+model <- lm(day_of_year~tmax_spring, data = df2)
+summary(model)
+```
+
+### Shapiro-Wilk test
+```{r cache = TRUE}
+#check for normality in distribution of residuals 
+shapiro.test(model$residuals) 
+#doesn't pass this test
+```
+
+We see some evidence of relationship, with warmer spring max temps associated with earlier appearance of flowers/flower buds. The estimate is -0.04 days per degree spring maximum temperature. However, we don't see normally distributed residuals, so we likely need to look at non-parametric options for this kind of relationship.
+
+
+### Plot 2: Relationship between year and first flower date
+
+```{r cache = TRUE, echo=FALSE}
+p <- ggplot(data = df2, aes(x = year, y = day_of_year)) +
+  stat_cor() +
+  stat_smooth(method = "lm", formula = y ~ x, size = 1) +
+  geom_point()
+plot(p + labs(title = "Onset of flowers/buds over the period of record in Red Maple"))
+```
+
+### Model parmeters
+```{r cache = TRUE}
+model2 <- lm(day_of_year~year, data = df2)
+summary(model2)
+```
+
+### Shapiro-Wilk test
+```{r cache = TRUE}
+#check for normality in distribution of residuals
+shapiro.test(model2$residuals) 
+```
+
+We do not see evidence of a trend in first flower date over time. Again, the residuals are not randomly distributed, pointing to applying a non-parametric test.
+
+
+
+
+
