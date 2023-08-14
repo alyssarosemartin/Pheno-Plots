@@ -17,4 +17,4 @@ This is simpler code, that does essentially the same thing as the Shiny app, but
 
 This RMarkdown is a prototype for addressing common questions asked by USA-NPN Local Phenology Projects. It demonstrates how to download data, and explore change over time in onset dates, and how onset dates relate to climate predictor variables. It is a work in progress. 
 
-##GRSM_Exploration.pdf is the RMarkdown output from the GRSM_Exploration R code.
+## GRSM_Exploration.pdf is the RMarkdown output from the GRSM_Exploration R code.
